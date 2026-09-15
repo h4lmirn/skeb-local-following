@@ -25,7 +25,7 @@ Skebで自分が選んだクリエイターの情報を端末内に保存し、�
 ### 1. Install
 
 1. このリポジトリをダウンロードまたはcloneします。
-2. ChromeまたはArcで `chrome://extensions` を開きます。
+2. Chromeで `chrome://extensions` を開きます。
 3. 画面右上の「デベロッパー モード」を有効にします。
 4. 「パッケージ化されていない拡張機能を読み込む」を押します。
 5. `skeb-local-following` フォルダを選択します。
