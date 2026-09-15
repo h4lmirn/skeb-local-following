@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Skeb Local Following",
+  "version": "0.3.1",
+  "description": "閲覧済みのSkebクリエイター情報を端末内に保存し、フォロー中一覧へ表示します。",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://skeb.jp/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Skeb Local Following",
+    "default_popup": "popup.html"
+  }
+}
