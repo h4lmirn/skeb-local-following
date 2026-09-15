@@ -238,11 +238,19 @@
     }, null);
   }
 
-  function makePanel(record, blurThumbnails) {
+  function settingsSignature(settings) {
+    return JSON.stringify({
+      blurThumbnails: settings.blurThumbnails !== false,
+      hiddenAmountGenres: [...(settings.hiddenAmountGenres || [])].sort()
+    });
+  }
+
+  function makePanel(record, settings) {
     const panel = document.createElement("div");
     panel.className = "skeb-local-panel";
     panel.dataset.creator = record.screenName.toLowerCase();
     panel.dataset.capturedAt = String(record.capturedAt);
+    panel.dataset.settings = settingsSignature(settings);
 
     const summary = document.createElement("div");
     summary.className = "skeb-local-summary";
@@ -252,7 +260,9 @@
     status.textContent = record.acceptable ? "最終閲覧時：募集中" : "最終閲覧時：停止中";
     summary.append(status);
 
-    for (const item of record.amounts.slice(0, 4)) {
+    const hiddenAmountGenres = new Set(settings.hiddenAmountGenres || []);
+    const visibleAmounts = record.amounts.filter((item) => !hiddenAmountGenres.has(item.genre));
+    for (const item of visibleAmounts.slice(0, 4)) {
       const amount = document.createElement("span");
       amount.className = "skeb-local-amount";
       amount.textContent = `${item.genre ? `${item.genre} ` : ""}${item.amount}`;
@@ -270,7 +280,7 @@
         image.loading = "lazy";
         image.referrerPolicy = "strict-origin-when-cross-origin";
         image.dataset.sensitive = work.sensitive ? "true" : "false";
-        if (blurThumbnails || work.sensitive) image.classList.add("is-blurred");
+        if (settings.blurThumbnails !== false || work.sensitive) image.classList.add("is-blurred");
         workList.append(image);
       }
       panel.append(workList);
@@ -290,7 +300,7 @@
 
     const [{ [STORAGE_KEY]: creators }, { [SETTINGS_KEY]: settings }] = await Promise.all([
       chrome.storage.local.get({ [STORAGE_KEY]: {} }),
-      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true } })
+      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } })
     ]);
 
     const linksByCreator = new Map();
@@ -310,20 +320,16 @@
       if (!card) continue;
       const existing = card.querySelector(`.skeb-local-panel[data-creator="${CSS.escape(key)}"]`);
       if (existing) {
-        if (existing.dataset.capturedAt !== String(record.capturedAt)) {
-          existing.replaceWith(makePanel(record, settings.blurThumbnails !== false));
-        } else {
-          for (const image of existing.querySelectorAll(".skeb-local-works img")) {
-            image.classList.toggle(
-              "is-blurred",
-              settings.blurThumbnails !== false || image.dataset.sensitive === "true"
-            );
-          }
+        if (
+          existing.dataset.capturedAt !== String(record.capturedAt) ||
+          existing.dataset.settings !== settingsSignature(settings)
+        ) {
+          existing.replaceWith(makePanel(record, settings));
         }
         continue;
       }
       card.classList.add("skeb-local-enhanced-card");
-      card.append(makePanel(record, settings.blurThumbnails !== false));
+      card.append(makePanel(record, settings));
     }
   }
 
