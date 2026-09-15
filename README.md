@@ -49,7 +49,7 @@ Skebで自分が選んだクリエイターの情報を端末内に保存し、�
 Skebの「フォロー中のクリエイター」一覧を開きます。通常のURLは次の形式です。
 
 ```text
-https://skeb.jp/@あなたのユーザーID/following_creators
+https://skeb.jp/@あなたのユーザーID/following_creators?sort=date
 ```
 
 保存済みクリエイターのカードに以下が追加されます。
