@@ -2,21 +2,68 @@
 
 const count = document.getElementById("count");
 const blur = document.getElementById("blur");
+const amountGenreOptions = document.getElementById("amount-genre-options");
+const amountGenreEmpty = document.getElementById("amount-genre-empty");
 const clear = document.getElementById("clear");
 const message = document.getElementById("message");
 let clearArmed = false;
 let clearTimer = null;
 
 async function refresh() {
-  const { creators = {}, settings = { blurThumbnails: true } } =
+  const { creators = {}, settings = {} } =
     await chrome.storage.local.get(["creators", "settings"]);
   count.textContent = `${Object.keys(creators).length}人分をこの端末に保存中`;
   blur.checked = settings.blurThumbnails !== false;
+  renderAmountGenres(creators, settings.hiddenAmountGenres || []);
+}
+
+function renderAmountGenres(creators, hiddenGenres) {
+  const genres = [];
+  const seen = new Set();
+
+  for (const creator of Object.values(creators)) {
+    for (const item of creator.amounts || []) {
+      const genre = (item.genre || "").trim();
+      if (!genre || seen.has(genre)) continue;
+      seen.add(genre);
+      genres.push(genre);
+    }
+  }
+
+  amountGenreOptions.replaceChildren();
+  amountGenreEmpty.hidden = genres.length > 0;
+  for (const genre of genres) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = genre;
+    checkbox.checked = !hiddenGenres.includes(genre);
+    checkbox.addEventListener("change", saveAmountGenreVisibility);
+    label.append(checkbox, document.createTextNode(genre));
+    amountGenreOptions.append(label);
+  }
+}
+
+async function updateSettings(patch) {
+  const { settings = {} } = await chrome.storage.local.get("settings");
+  await chrome.storage.local.set({ settings: { ...settings, ...patch } });
+}
+
+async function saveAmountGenreVisibility() {
+  try {
+    const hiddenAmountGenres = [...amountGenreOptions.querySelectorAll('input[type="checkbox"]')]
+      .filter((checkbox) => !checkbox.checked)
+      .map((checkbox) => checkbox.value);
+    await updateSettings({ hiddenAmountGenres });
+    message.textContent = "表示する種類を保存しました。";
+  } catch (error) {
+    message.textContent = `設定を保存できませんでした: ${error.message}`;
+  }
 }
 
 blur.addEventListener("change", async () => {
   try {
-    await chrome.storage.local.set({ settings: { blurThumbnails: blur.checked } });
+    await updateSettings({ blurThumbnails: blur.checked });
     message.textContent = "設定を保存しました。";
   } catch (error) {
     message.textContent = `設定を保存できませんでした: ${error.message}`;
