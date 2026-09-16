@@ -4,17 +4,73 @@ const count = document.getElementById("count");
 const blur = document.getElementById("blur");
 const amountGenreOptions = document.getElementById("amount-genre-options");
 const amountGenreEmpty = document.getElementById("amount-genre-empty");
+const folderForm = document.getElementById("folder-form");
+const folderName = document.getElementById("folder-name");
+const folderList = document.getElementById("folder-list");
+const followingSnapshot = document.getElementById("following-snapshot");
 const clear = document.getElementById("clear");
 const message = document.getElementById("message");
 let clearArmed = false;
 let clearTimer = null;
 
 async function refresh() {
-  const { creators = {}, settings = {} } =
-    await chrome.storage.local.get(["creators", "settings"]);
+  const { creators = {}, settings = {}, folders = [], followingSnapshot: snapshot = null } =
+    await chrome.storage.local.get(["creators", "settings", "folders", "followingSnapshot"]);
   count.textContent = `${Object.keys(creators).length}人分をこの端末に保存中`;
   blur.checked = settings.blurThumbnails !== false;
   renderAmountGenres(creators, settings.hiddenAmountGenres || []);
+  renderFolders(folders);
+  followingSnapshot.textContent = Array.isArray(snapshot?.screenNames)
+    ? `自分のフォロー記録：${snapshot.screenNames.length}人（@${snapshot.owner}）`
+    : "自分のフォロー記録は未登録です。自分のフォロー中ページ上部から記録できます。";
+}
+
+function renderFolders(folders) {
+  folderList.replaceChildren();
+  for (const name of folders) {
+    const row = document.createElement("div");
+    row.className = "folder-row";
+    const label = document.createElement("span");
+    label.textContent = name;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "削除";
+    remove.addEventListener("click", () => removeFolder(name));
+    row.append(label, remove);
+    folderList.append(row);
+  }
+}
+
+folderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = folderName.value.trim();
+  if (!name) return;
+  try {
+    const { folders = [] } = await chrome.storage.local.get("folders");
+    if (!folders.includes(name)) folders.push(name);
+    await chrome.storage.local.set({ folders });
+    folderName.value = "";
+    await refresh();
+    message.textContent = `「${name}」を追加しました。`;
+  } catch (error) {
+    message.textContent = `フォルダを追加できませんでした: ${error.message}`;
+  }
+});
+
+async function removeFolder(name) {
+  try {
+    const { folders = [], folderAssignments = {} } =
+      await chrome.storage.local.get(["folders", "folderAssignments"]);
+    const nextFolders = folders.filter((folder) => folder !== name);
+    for (const [screenName, folder] of Object.entries(folderAssignments)) {
+      if (folder === name) delete folderAssignments[screenName];
+    }
+    await chrome.storage.local.set({ folders: nextFolders, folderAssignments });
+    await refresh();
+    message.textContent = `「${name}」を削除しました。`;
+  } catch (error) {
+    message.textContent = `フォルダを削除できませんでした: ${error.message}`;
+  }
 }
 
 function renderAmountGenres(creators, hiddenGenres) {

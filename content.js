@@ -3,6 +3,9 @@
 
   const STORAGE_KEY = "creators";
   const SETTINGS_KEY = "settings";
+  const FOLLOWING_SNAPSHOT_KEY = "followingSnapshot";
+  const FOLDERS_KEY = "folders";
+  const FOLDER_ASSIGNMENTS_KEY = "folderAssignments";
   const MAX_WORKS = 3;
   const PROFILE_PATH = /^\/@([^/]+)\/?$/;
   const FOLLOWING_PATH = /\/(following_users|following_creators)\/?$/;
@@ -18,6 +21,11 @@
 
   function profileNameFromPath(pathname = location.pathname) {
     const match = pathname.match(PROFILE_PATH);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function followingOwnerFromPath(pathname = location.pathname) {
+    const match = pathname.match(/^\/@([^/]+)\/(?:following_users|following_creators)\/?$/);
     return match ? decodeURIComponent(match[1]) : null;
   }
 
@@ -238,6 +246,144 @@
     }, null);
   }
 
+  function creatorCards(main) {
+    const linksByCreator = new Map();
+    for (const link of main.querySelectorAll('a[href^="/@"]')) {
+      const href = link.getAttribute("href") || "";
+      const match = href.match(/^\/@([^/]+)\/?$/);
+      if (!match || link.closest("#skeb-local-following-toolbar")) continue;
+      const key = decodeURIComponent(match[1]).toLowerCase();
+      if (!linksByCreator.has(key)) linksByCreator.set(key, []);
+      linksByCreator.get(key).push(link);
+    }
+
+    const cards = new Map();
+    for (const [key, links] of linksByCreator) {
+      const card = chooseCard(links);
+      const rect = card?.getBoundingClientRect();
+      const isKnownCard = card?.classList.contains("skeb-local-folder-hidden") ||
+        card?.querySelector(".skeb-local-card-organizer");
+      if (!card || !card.querySelector("img") || !rect || (!isKnownCard && rect.width * rect.height < 12000)) continue;
+      cards.set(key, card);
+    }
+    return cards;
+  }
+
+  function folderFilterValue() {
+    return document.querySelector("#skeb-local-folder-filter")?.value || "all";
+  }
+
+  function applyFolderFilter(cards, assignments, selectedFolder) {
+    for (const [key, card] of cards) {
+      const assigned = assignments[key] || "";
+      const visible = selectedFolder === "all" ||
+        (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
+      card.classList.toggle("skeb-local-folder-hidden", !visible);
+    }
+  }
+
+  async function syncFollowingSnapshot(owner, creatorKeys) {
+    const snapshot = {
+      owner,
+      screenNames: [...creatorKeys].sort(),
+      capturedAt: Date.now()
+    };
+    await chrome.storage.local.set({ [FOLLOWING_SNAPSHOT_KEY]: snapshot });
+    showCaptureNotice(`@${owner} のフォロー中 ${snapshot.screenNames.length}人を記録しました`);
+  }
+
+  function makeFollowingToolbar(owner, folders, snapshot, creatorKeys, assignments) {
+    const creatorKeyList = [...creatorKeys];
+    const toolbar = document.createElement("section");
+    toolbar.id = "skeb-local-following-toolbar";
+    toolbar.dataset.state = JSON.stringify({
+      owner: owner || "",
+      folders,
+      snapshotAt: snapshot?.capturedAt || 0,
+      creatorCount: creatorKeyList.length
+    });
+
+    const title = document.createElement("strong");
+    title.textContent = "ローカル整理";
+    toolbar.append(title);
+
+    const filterLabel = document.createElement("label");
+    filterLabel.textContent = "フォルダ";
+    const filter = document.createElement("select");
+    filter.id = "skeb-local-folder-filter";
+    filter.append(new Option("すべて", "all"), new Option("未分類", "unassigned"));
+    for (const folder of folders) filter.append(new Option(folder, folder));
+    const previousFilter = folderFilterValue();
+    filter.value = [...filter.options].some((option) => option.value === previousFilter)
+      ? previousFilter
+      : "all";
+    filter.addEventListener("change", () => applyFolderFilter(creatorCards(document.querySelector("main")), assignments, filter.value));
+    filterLabel.append(filter);
+    toolbar.append(filterLabel);
+
+    const snapshotText = document.createElement("span");
+    snapshotText.className = "skeb-local-following-snapshot-text";
+    snapshotText.textContent = Array.isArray(snapshot?.screenNames)
+      ? `自分のフォロー記録：${snapshot.screenNames.length}人（@${snapshot.owner}）`
+      : "自分のフォロー記録：未登録";
+    toolbar.append(snapshotText);
+
+    if (owner && (!snapshot?.owner || snapshot.owner.toLowerCase() === owner.toLowerCase())) {
+      const sync = document.createElement("button");
+      sync.type = "button";
+      sync.textContent = snapshot?.owner ? "表示中の一覧で更新" : `この一覧（@${owner}）を自分のフォローとして記録`;
+      sync.title = "遅延読み込みがある場合は、最下部までスクロールしてから押してください";
+      sync.addEventListener("click", () => syncFollowingSnapshot(owner, creatorKeyList).catch(console.warn));
+      toolbar.append(sync);
+    }
+
+    const note = document.createElement("small");
+    note.textContent = "同期前に一覧の最下部まで読み込むと、未フォロー判定が正確になります。";
+    toolbar.append(note);
+    return toolbar;
+  }
+
+  function makeCardOrganizer(key, folders, assignment, snapshot) {
+    const organizer = document.createElement("div");
+    organizer.className = "skeb-local-card-organizer";
+    organizer.dataset.creator = key;
+    organizer.dataset.state = JSON.stringify({ folders, assignment, snapshotAt: snapshot?.capturedAt || 0 });
+
+    if (Array.isArray(snapshot?.screenNames)) {
+      const following = snapshot.screenNames.includes(key);
+      const badge = document.createElement("span");
+      badge.className = `skeb-local-follow-badge ${following ? "is-following" : "is-not-following"}`;
+      badge.textContent = following ? "自分もフォロー中" : "自分は未フォロー";
+      organizer.append(badge);
+    }
+
+    const folder = document.createElement("select");
+    folder.className = "skeb-local-card-folder";
+    folder.setAttribute("aria-label", "ローカルフォルダ");
+    folder.append(new Option("未分類", ""));
+    for (const name of folders) folder.append(new Option(name, name));
+    folder.value = folders.includes(assignment) ? assignment : "";
+    folder.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    for (const eventName of ["mousedown", "pointerdown"]) {
+      folder.addEventListener(eventName, (event) => event.stopPropagation());
+    }
+    folder.addEventListener("change", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const { [FOLDER_ASSIGNMENTS_KEY]: assignments = {} } =
+        await chrome.storage.local.get(FOLDER_ASSIGNMENTS_KEY);
+      if (folder.value) assignments[key] = folder.value;
+      else delete assignments[key];
+      await chrome.storage.local.set({ [FOLDER_ASSIGNMENTS_KEY]: assignments });
+      showCaptureNotice(folder.value ? `@${key} を「${folder.value}」に分類しました` : `@${key} を未分類に戻しました`);
+    });
+    organizer.append(folder);
+    return organizer;
+  }
+
   function settingsSignature(settings) {
     return JSON.stringify({
       blurThumbnails: settings.blurThumbnails !== false,
@@ -298,26 +444,40 @@
     const main = document.querySelector("main");
     if (!main) return;
 
-    const [{ [STORAGE_KEY]: creators }, { [SETTINGS_KEY]: settings }] = await Promise.all([
+    const [
+      { [STORAGE_KEY]: creators },
+      { [SETTINGS_KEY]: settings },
+      { [FOLLOWING_SNAPSHOT_KEY]: snapshot },
+      { [FOLDERS_KEY]: folders },
+      { [FOLDER_ASSIGNMENTS_KEY]: assignments }
+    ] = await Promise.all([
       chrome.storage.local.get({ [STORAGE_KEY]: {} }),
-      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } })
+      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } }),
+      chrome.storage.local.get({ [FOLLOWING_SNAPSHOT_KEY]: null }),
+      chrome.storage.local.get({ [FOLDERS_KEY]: [] }),
+      chrome.storage.local.get({ [FOLDER_ASSIGNMENTS_KEY]: {} })
     ]);
 
-    const linksByCreator = new Map();
-    for (const link of main.querySelectorAll('a[href^="/@"]')) {
-      const href = link.getAttribute("href") || "";
-      const match = href.match(/^\/@([^/]+)\/?$/);
-      if (!match) continue;
-      const key = decodeURIComponent(match[1]).toLowerCase();
-      if (!linksByCreator.has(key)) linksByCreator.set(key, []);
-      linksByCreator.get(key).push(link);
+    const cards = creatorCards(main);
+    const oldToolbar = document.getElementById("skeb-local-following-toolbar");
+    const nextToolbar = makeFollowingToolbar(followingOwnerFromPath(), folders, snapshot, cards.keys(), assignments);
+    let toolbar = oldToolbar;
+    if (oldToolbar?.dataset.state !== nextToolbar.dataset.state) {
+      if (oldToolbar) oldToolbar.replaceWith(nextToolbar);
+      else main.prepend(nextToolbar);
+      toolbar = nextToolbar;
     }
 
-    for (const [key, links] of linksByCreator) {
+    for (const [key, card] of cards) {
+      const existingOrganizer = card.querySelector(`.skeb-local-card-organizer[data-creator="${CSS.escape(key)}"]`);
+      const organizer = makeCardOrganizer(key, folders, assignments[key] || "", snapshot);
+      if (existingOrganizer?.dataset.state !== organizer.dataset.state) {
+        if (existingOrganizer) existingOrganizer.replaceWith(organizer);
+        else card.append(organizer);
+      }
+
       const record = creators[key];
       if (!record) continue;
-      const card = chooseCard(links);
-      if (!card) continue;
       const existing = card.querySelector(`.skeb-local-panel[data-creator="${CSS.escape(key)}"]`);
       if (existing) {
         if (
@@ -331,6 +491,7 @@
       card.classList.add("skeb-local-enhanced-card");
       card.append(makePanel(record, settings));
     }
+    applyFolderFilter(cards, assignments, toolbar.querySelector("#skeb-local-folder-filter").value);
   }
 
   async function run() {

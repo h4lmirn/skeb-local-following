@@ -62,6 +62,88 @@
   overflow: visible !important;
 }
 
+#skeb-local-following-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(43, 224, 168, 0.48);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #46505a;
+  font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#skeb-local-following-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#skeb-local-following-toolbar select,
+#skeb-local-following-toolbar button,
+.skeb-local-card-folder {
+  padding: 5px 8px;
+  border: 1px solid #bdc6ca;
+  border-radius: 6px;
+  background: #fff;
+  color: #46505a;
+  font: inherit;
+}
+
+#skeb-local-following-toolbar button {
+  cursor: pointer;
+}
+
+#skeb-local-following-toolbar small {
+  flex-basis: 100%;
+  color: #849099;
+}
+
+.skeb-local-card-organizer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 8px 0;
+  color: #46505a;
+  font: 10px/1.25 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: auto;
+}
+
+.skeb-local-follow-badge {
+  padding: 3px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.skeb-local-follow-badge.is-following {
+  background: #dff9ef;
+  color: #127b5d;
+  font-weight: 700;
+}
+
+.skeb-local-follow-badge.is-not-following {
+  background: #edf0f2;
+  color: #67727b;
+}
+
+.skeb-local-card-folder {
+  min-width: 0;
+  max-width: 120px;
+  padding: 3px 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.skeb-local-folder-hidden {
+  display: none !important;
+}
+
 .skeb-local-panel {
   margin-top: 8px;
   padding: 8px;
@@ -142,6 +224,17 @@
 
   .skeb-local-panel {
     background: rgba(30, 38, 42, 0.97);
+    color: #e2e8eb;
+  }
+  #skeb-local-following-toolbar {
+    background: rgba(30, 38, 42, 0.97);
+    color: #e2e8eb;
+  }
+  #skeb-local-following-toolbar select,
+  #skeb-local-following-toolbar button,
+  .skeb-local-card-folder {
+    border-color: #556168;
+    background: #303a3f;
     color: #e2e8eb;
   }
   .skeb-local-amount {

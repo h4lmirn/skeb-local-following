@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 Skeb Local Following is a local-only browser extension. It does not operate an external server and does not transmit saved creator information or browsing information to the developer or any third party.
 
@@ -14,8 +14,10 @@ When the user explicitly presses the save button on a Skeb creator profile, the 
 - Genres and recommended amounts displayed on the page
 - Up to three displayed work-page URLs and thumbnail URLs
 - The date and time the information was saved
+- A user-confirmed snapshot of the creator IDs displayed on the user's own following page
+- User-created local folder names and creator-to-folder assignments
 
-The extension also stores the user's thumbnail-blur preference.
+The extension also stores the user's thumbnail-blur and amount-display preferences.
 
 ## Storage and transmission
 
