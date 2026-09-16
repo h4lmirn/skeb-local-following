@@ -7,22 +7,18 @@ const amountGenreEmpty = document.getElementById("amount-genre-empty");
 const folderForm = document.getElementById("folder-form");
 const folderName = document.getElementById("folder-name");
 const folderList = document.getElementById("folder-list");
-const followingSnapshot = document.getElementById("following-snapshot");
 const clear = document.getElementById("clear");
 const message = document.getElementById("message");
 let clearArmed = false;
 let clearTimer = null;
 
 async function refresh() {
-  const { creators = {}, settings = {}, folders = [], followingSnapshot: snapshot = null } =
-    await chrome.storage.local.get(["creators", "settings", "folders", "followingSnapshot"]);
+  const { creators = {}, settings = {}, folders = [] } =
+    await chrome.storage.local.get(["creators", "settings", "folders"]);
   count.textContent = `${Object.keys(creators).length}人分をこの端末に保存中`;
   blur.checked = settings.blurThumbnails !== false;
   renderAmountGenres(creators, settings.hiddenAmountGenres || []);
   renderFolders(folders);
-  followingSnapshot.textContent = Array.isArray(snapshot?.screenNames)
-    ? `自分のフォロー記録：${snapshot.screenNames.length}人を個別登録中`
-    : "自分のフォロー記録は未登録です。フォロー中ページの各カードから登録できます。";
 }
 
 function renderFolders(folders) {

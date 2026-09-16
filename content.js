@@ -3,7 +3,6 @@
 
   const STORAGE_KEY = "creators";
   const SETTINGS_KEY = "settings";
-  const FOLLOWING_SNAPSHOT_KEY = "followingSnapshot";
   const FOLDERS_KEY = "folders";
   const FOLDER_ASSIGNMENTS_KEY = "folderAssignments";
   const MAX_WORKS = 3;
@@ -15,6 +14,9 @@
     ["Accepting", true],
     ["Closed", false]
   ]);
+
+  // v0.5.1以前の廃止済みローカルフォロー記録を削除する。
+  chrome.storage.local.remove("followingSnapshot").catch(console.warn);
 
   let scheduled = false;
   const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
@@ -369,31 +371,54 @@
     return card;
   }
 
+  function clearFolderEmptyState(main) {
+    main.querySelectorAll(".skeb-local-folder-empty").forEach((element) => element.remove());
+    main.querySelectorAll(".skeb-local-folder-empty-container")
+      .forEach((element) => element.classList.remove("skeb-local-folder-empty-container"));
+  }
+
+  function showFolderEmptyState(main, layoutItems, selectedFolder) {
+    const firstItem = layoutItems[0];
+    const container = firstItem?.parentElement;
+    if (!container) return;
+
+    for (const oldContainer of main.querySelectorAll(".skeb-local-folder-empty-container")) {
+      if (oldContainer !== container) oldContainer.classList.remove("skeb-local-folder-empty-container");
+    }
+    container.classList.add("skeb-local-folder-empty-container");
+    const existing = main.querySelector(".skeb-local-folder-empty");
+    const empty = existing?.parentElement === container ? existing : document.createElement("div");
+    main.querySelectorAll(".skeb-local-folder-empty").forEach((element) => {
+      if (element !== empty) element.remove();
+    });
+    empty.className = "skeb-local-folder-empty";
+    const message = selectedFolder === "unassigned"
+      ? "未分類のクリエイターはいません"
+      : `「${selectedFolder}」に分類したクリエイターはいません`;
+    if (empty.textContent !== message) empty.textContent = message;
+    if (!empty.isConnected) container.prepend(empty);
+  }
+
   function applyFolderFilter(cards, assignments, selectedFolder) {
+    const main = document.querySelector("main");
+    if (!main) return;
+
+    const layoutItems = [];
+    let visibleCount = 0;
     for (const [key, card] of cards) {
       const assigned = assignments[key] || "";
       const visible = selectedFolder === "all" ||
         (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
-      const layoutItem = layoutItemForCard(card, document.querySelector("main"));
+      const layoutItem = layoutItemForCard(card, main);
+      layoutItems.push(layoutItem);
       if (layoutItem !== card) card.classList.remove("skeb-local-folder-hidden");
       layoutItem.classList.toggle("skeb-local-folder-hidden", !visible);
+      if (visible) visibleCount += 1;
     }
-  }
 
-  async function toggleFollowingRecord(screenName) {
-    const { [FOLLOWING_SNAPSHOT_KEY]: current = {} } =
-      await chrome.storage.local.get(FOLLOWING_SNAPSHOT_KEY);
-    const screenNames = new Set(Array.isArray(current?.screenNames) ? current.screenNames : []);
-    const willFollow = !screenNames.has(screenName);
-    if (willFollow) screenNames.add(screenName);
-    else screenNames.delete(screenName);
-    const snapshot = {
-      mode: "manual",
-      screenNames: [...screenNames].sort(),
-      capturedAt: Date.now()
-    };
-    await chrome.storage.local.set({ [FOLLOWING_SNAPSHOT_KEY]: snapshot });
-    showCaptureNotice(willFollow ? `@${screenName} を自分のフォローに登録しました` : `@${screenName} のフォロー記録を解除しました`);
+    if (selectedFolder !== "all" && cards.size > 0 && visibleCount === 0) {
+      showFolderEmptyState(main, layoutItems, selectedFolder);
+    } else clearFolderEmptyState(main);
   }
 
   function makeFollowingToolbar(folders, assignments) {
@@ -427,27 +452,11 @@
     return toolbar;
   }
 
-  function makeCardOrganizer(key, folders, assignment, snapshot) {
+  function makeCardOrganizer(key, folders, assignment) {
     const organizer = document.createElement("div");
     organizer.className = "skeb-local-card-organizer";
     organizer.dataset.creator = key;
-    organizer.dataset.state = JSON.stringify({ folders, assignment, snapshotAt: snapshot?.capturedAt || 0 });
-
-    const following = snapshot?.screenNames?.includes(key) || false;
-    const followToggle = document.createElement("button");
-    followToggle.type = "button";
-    followToggle.className = `skeb-local-follow-badge ${following ? "is-following" : "is-not-following"}`;
-    followToggle.textContent = following ? "✓ 自分もフォロー中" : "自分のフォローに登録";
-    followToggle.setAttribute("aria-pressed", String(following));
-    for (const eventName of ["mousedown", "pointerdown"]) {
-      followToggle.addEventListener(eventName, (event) => event.stopPropagation());
-    }
-    followToggle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      toggleFollowingRecord(key).catch(console.warn);
-    });
-    organizer.append(followToggle);
+    organizer.dataset.state = JSON.stringify({ folders, assignment });
 
     const folder = document.createElement("select");
     folder.className = "skeb-local-card-folder";
@@ -539,13 +548,11 @@
     const [
       { [STORAGE_KEY]: creators },
       { [SETTINGS_KEY]: settings },
-      { [FOLLOWING_SNAPSHOT_KEY]: snapshot },
       { [FOLDERS_KEY]: folders },
       { [FOLDER_ASSIGNMENTS_KEY]: assignments }
     ] = await Promise.all([
       chrome.storage.local.get({ [STORAGE_KEY]: {} }),
       chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } }),
-      chrome.storage.local.get({ [FOLLOWING_SNAPSHOT_KEY]: null }),
       chrome.storage.local.get({ [FOLDERS_KEY]: [] }),
       chrome.storage.local.get({ [FOLDER_ASSIGNMENTS_KEY]: {} })
     ]);
@@ -562,7 +569,7 @@
 
     for (const [key, card] of cards) {
       const existingOrganizer = card.querySelector(`.skeb-local-card-organizer[data-creator="${CSS.escape(key)}"]`);
-      const organizer = makeCardOrganizer(key, folders, assignments[key] || "", snapshot);
+      const organizer = makeCardOrganizer(key, folders, assignments[key] || "");
       if (existingOrganizer?.dataset.state !== organizer.dataset.state) {
         if (existingOrganizer) existingOrganizer.replaceWith(organizer);
         else card.append(organizer);
