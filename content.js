@@ -330,7 +330,7 @@
     }, null);
   }
 
-  function creatorCards(main) {
+  function creatorLinksByKey(main) {
     const linksByCreator = new Map();
     for (const link of main.querySelectorAll('a[href^="/@"]')) {
       const href = link.getAttribute("href") || "";
@@ -340,9 +340,12 @@
       if (!linksByCreator.has(key)) linksByCreator.set(key, []);
       linksByCreator.get(key).push(link);
     }
+    return linksByCreator;
+  }
 
+  function creatorCards(main) {
     const cards = new Map();
-    for (const [key, links] of linksByCreator) {
+    for (const [key, links] of creatorLinksByKey(main)) {
       const card = chooseCard(links);
       const rect = card?.getBoundingClientRect();
       const isKnownCard = Boolean(card?.closest(".skeb-local-folder-hidden")) ||
@@ -351,6 +354,16 @@
       cards.set(key, card);
     }
     return cards;
+  }
+
+  function creatorLayoutItems(main) {
+    const items = new Map();
+    for (const [key, links] of creatorLinksByKey(main)) {
+      const card = chooseCard(links);
+      if (!card) continue;
+      items.set(key, layoutItemForCard(card, main, key));
+    }
+    return items;
   }
 
   function folderFilterValue() {
@@ -406,25 +419,21 @@
     if (!empty.isConnected) container.prepend(empty);
   }
 
-  function applyFolderFilter(cards, assignments, selectedFolder) {
-    const main = document.querySelector("main");
-    if (!main) return;
-
+  function applyFolderFilter(main, assignments, selectedFolder) {
     main.querySelectorAll(".skeb-local-folder-hidden")
       .forEach((element) => element.classList.remove("skeb-local-folder-hidden"));
-    const layoutItems = [];
+    const items = creatorLayoutItems(main);
+    const layoutItems = [...items.values()];
     let visibleCount = 0;
-    for (const [key, card] of cards) {
+    for (const [key, layoutItem] of items) {
       const assigned = assignments[key] || "";
       const visible = selectedFolder === "all" ||
         (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
-      const layoutItem = layoutItemForCard(card, main, key);
-      layoutItems.push(layoutItem);
       layoutItem.classList.toggle("skeb-local-folder-hidden", !visible);
       if (visible) visibleCount += 1;
     }
 
-    if (selectedFolder !== "all" && cards.size > 0 && visibleCount === 0) {
+    if (selectedFolder !== "all" && items.size > 0 && visibleCount === 0) {
       showFolderEmptyState(main, layoutItems, selectedFolder);
     } else clearFolderEmptyState(main);
   }
@@ -448,7 +457,10 @@
     filter.value = [...filter.options].some((option) => option.value === previousFilter)
       ? previousFilter
       : "all";
-    filter.addEventListener("change", () => applyFolderFilter(creatorCards(document.querySelector("main")), assignments, filter.value));
+    filter.addEventListener("change", () => {
+      const main = document.querySelector("main");
+      if (main) applyFolderFilter(main, assignments, filter.value);
+    });
     filterLabel.append(filter);
     toolbar.append(filterLabel);
 
@@ -598,7 +610,7 @@
       card.classList.add("skeb-local-enhanced-card");
       card.append(makePanel(record, settings));
     }
-    applyFolderFilter(cards, assignments, toolbar.querySelector("#skeb-local-folder-filter").value);
+    applyFolderFilter(main, assignments, toolbar.querySelector("#skeb-local-folder-filter").value);
   }
 
   async function run() {
