@@ -116,9 +116,13 @@
 }
 
 .skeb-local-follow-badge {
+  appearance: none;
+  border: 0;
   padding: 3px 6px;
   border-radius: 999px;
+  font: inherit;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .skeb-local-follow-badge.is-following {

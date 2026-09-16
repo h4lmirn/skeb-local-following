@@ -24,11 +24,6 @@
     return match ? decodeURIComponent(match[1]) : null;
   }
 
-  function followingOwnerFromPath(pathname = location.pathname) {
-    const match = pathname.match(/^\/@([^/]+)\/(?:following_users|following_creators)\/?$/);
-    return match ? decodeURIComponent(match[1]) : null;
-  }
-
   function absoluteUrl(value) {
     try {
       return new URL(value, location.origin).href;
@@ -282,25 +277,28 @@
     }
   }
 
-  async function syncFollowingSnapshot(owner, creatorKeys) {
+  async function toggleFollowingRecord(screenName) {
+    const { [FOLLOWING_SNAPSHOT_KEY]: current = {} } =
+      await chrome.storage.local.get(FOLLOWING_SNAPSHOT_KEY);
+    const screenNames = new Set(Array.isArray(current?.screenNames) ? current.screenNames : []);
+    const willFollow = !screenNames.has(screenName);
+    if (willFollow) screenNames.add(screenName);
+    else screenNames.delete(screenName);
     const snapshot = {
-      owner,
-      screenNames: [...creatorKeys].sort(),
+      mode: "manual",
+      screenNames: [...screenNames].sort(),
       capturedAt: Date.now()
     };
     await chrome.storage.local.set({ [FOLLOWING_SNAPSHOT_KEY]: snapshot });
-    showCaptureNotice(`@${owner} のフォロー中 ${snapshot.screenNames.length}人を記録しました`);
+    showCaptureNotice(willFollow ? `@${screenName} を自分のフォローに登録しました` : `@${screenName} のフォロー記録を解除しました`);
   }
 
-  function makeFollowingToolbar(owner, folders, snapshot, creatorKeys, assignments) {
-    const creatorKeyList = [...creatorKeys];
+  function makeFollowingToolbar(folders, snapshot, assignments) {
     const toolbar = document.createElement("section");
     toolbar.id = "skeb-local-following-toolbar";
     toolbar.dataset.state = JSON.stringify({
-      owner: owner || "",
       folders,
-      snapshotAt: snapshot?.capturedAt || 0,
-      creatorCount: creatorKeyList.length
+      snapshotAt: snapshot?.capturedAt || 0
     });
 
     const title = document.createElement("strong");
@@ -324,22 +322,9 @@
     const snapshotText = document.createElement("span");
     snapshotText.className = "skeb-local-following-snapshot-text";
     snapshotText.textContent = Array.isArray(snapshot?.screenNames)
-      ? `自分のフォロー記録：${snapshot.screenNames.length}人（@${snapshot.owner}）`
+      ? `自分のフォロー記録：${snapshot.screenNames.length}人`
       : "自分のフォロー記録：未登録";
     toolbar.append(snapshotText);
-
-    if (owner && (!snapshot?.owner || snapshot.owner.toLowerCase() === owner.toLowerCase())) {
-      const sync = document.createElement("button");
-      sync.type = "button";
-      sync.textContent = snapshot?.owner ? "表示中の一覧で更新" : `この一覧（@${owner}）を自分のフォローとして記録`;
-      sync.title = "遅延読み込みがある場合は、最下部までスクロールしてから押してください";
-      sync.addEventListener("click", () => syncFollowingSnapshot(owner, creatorKeyList).catch(console.warn));
-      toolbar.append(sync);
-    }
-
-    const note = document.createElement("small");
-    note.textContent = "同期前に一覧の最下部まで読み込むと、未フォロー判定が正確になります。";
-    toolbar.append(note);
     return toolbar;
   }
 
@@ -349,13 +334,21 @@
     organizer.dataset.creator = key;
     organizer.dataset.state = JSON.stringify({ folders, assignment, snapshotAt: snapshot?.capturedAt || 0 });
 
-    if (Array.isArray(snapshot?.screenNames)) {
-      const following = snapshot.screenNames.includes(key);
-      const badge = document.createElement("span");
-      badge.className = `skeb-local-follow-badge ${following ? "is-following" : "is-not-following"}`;
-      badge.textContent = following ? "自分もフォロー中" : "自分は未フォロー";
-      organizer.append(badge);
+    const following = snapshot?.screenNames?.includes(key) || false;
+    const followToggle = document.createElement("button");
+    followToggle.type = "button";
+    followToggle.className = `skeb-local-follow-badge ${following ? "is-following" : "is-not-following"}`;
+    followToggle.textContent = following ? "✓ 自分もフォロー中" : "自分のフォローに登録";
+    followToggle.setAttribute("aria-pressed", String(following));
+    for (const eventName of ["mousedown", "pointerdown"]) {
+      followToggle.addEventListener(eventName, (event) => event.stopPropagation());
     }
+    followToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleFollowingRecord(key).catch(console.warn);
+    });
+    organizer.append(followToggle);
 
     const folder = document.createElement("select");
     folder.className = "skeb-local-card-folder";
@@ -460,7 +453,7 @@
 
     const cards = creatorCards(main);
     const oldToolbar = document.getElementById("skeb-local-following-toolbar");
-    const nextToolbar = makeFollowingToolbar(followingOwnerFromPath(), folders, snapshot, cards.keys(), assignments);
+    const nextToolbar = makeFollowingToolbar(folders, snapshot, assignments);
     let toolbar = oldToolbar;
     if (oldToolbar?.dataset.state !== nextToolbar.dataset.state) {
       if (oldToolbar) oldToolbar.replaceWith(nextToolbar);

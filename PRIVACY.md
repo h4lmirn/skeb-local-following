@@ -14,7 +14,7 @@ When the user explicitly presses the save button on a Skeb creator profile, the 
 - Genres and recommended amounts displayed on the page
 - Up to three displayed work-page URLs and thumbnail URLs
 - The date and time the information was saved
-- A user-confirmed snapshot of the creator IDs displayed on the user's own following page
+- Creator IDs that the user individually marks as followed
 - User-created local folder names and creator-to-folder assignments
 
 The extension also stores the user's thumbnail-blur and amount-display preferences.

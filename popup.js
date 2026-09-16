@@ -21,8 +21,8 @@ async function refresh() {
   renderAmountGenres(creators, settings.hiddenAmountGenres || []);
   renderFolders(folders);
   followingSnapshot.textContent = Array.isArray(snapshot?.screenNames)
-    ? `自分のフォロー記録：${snapshot.screenNames.length}人（@${snapshot.owner}）`
-    : "自分のフォロー記録は未登録です。自分のフォロー中ページ上部から記録できます。";
+    ? `自分のフォロー記録：${snapshot.screenNames.length}人を個別登録中`
+    : "自分のフォロー記録は未登録です。フォロー中ページの各カードから登録できます。";
 }
 
 function renderFolders(folders) {
