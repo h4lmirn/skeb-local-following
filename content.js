@@ -183,6 +183,42 @@
     await mountProfileControls();
   }
 
+  async function assignProfileFolder(screenName, folderName) {
+    const key = screenName.toLowerCase();
+    const { [FOLDER_ASSIGNMENTS_KEY]: assignments = {} } =
+      await chrome.storage.local.get(FOLDER_ASSIGNMENTS_KEY);
+    if (folderName) assignments[key] = folderName;
+    else delete assignments[key];
+    await chrome.storage.local.set({ [FOLDER_ASSIGNMENTS_KEY]: assignments });
+    showCaptureNotice(folderName ? `@${screenName} を「${folderName}」に分類しました` : `@${screenName} を未分類に戻しました`);
+  }
+
+  async function createAndAssignProfileFolder(screenName) {
+    const input = window.prompt("作成するローカルフォルダ名を入力してください（30文字まで）");
+    if (input === null) return;
+    const name = input.trim();
+    if (!name) {
+      showCaptureNotice("フォルダ名を入力してください。", true);
+      return;
+    }
+    if (name.length > 30) {
+      showCaptureNotice("フォルダ名は30文字以内にしてください。", true);
+      return;
+    }
+
+    const {
+      [FOLDERS_KEY]: folders = [],
+      [FOLDER_ASSIGNMENTS_KEY]: assignments = {}
+    } = await chrome.storage.local.get([FOLDERS_KEY, FOLDER_ASSIGNMENTS_KEY]);
+    if (!folders.includes(name)) folders.push(name);
+    assignments[screenName.toLowerCase()] = name;
+    await chrome.storage.local.set({
+      [FOLDERS_KEY]: folders,
+      [FOLDER_ASSIGNMENTS_KEY]: assignments
+    });
+    showCaptureNotice(`「${name}」を作成し、@${screenName} を分類しました`);
+  }
+
   async function mountProfileControls() {
     const screenName = profileNameFromPath();
     const main = document.querySelector("main");
@@ -192,9 +228,19 @@
       return;
     }
 
-    const { [STORAGE_KEY]: creators } = await chrome.storage.local.get({ [STORAGE_KEY]: {} });
+    const {
+      [STORAGE_KEY]: creators,
+      [FOLDERS_KEY]: folders,
+      [FOLDER_ASSIGNMENTS_KEY]: assignments
+    } = await chrome.storage.local.get({
+      [STORAGE_KEY]: {},
+      [FOLDERS_KEY]: [],
+      [FOLDER_ASSIGNMENTS_KEY]: {}
+    });
+    const key = screenName.toLowerCase();
     const isSaved = Boolean(creators[screenName.toLowerCase()]);
-    const controlState = `${screenName.toLowerCase()}:${isSaved ? "saved" : "unsaved"}`;
+    const assignment = folders.includes(assignments[key]) ? assignments[key] : "";
+    const controlState = JSON.stringify({ key, isSaved, folders, assignment });
     if (existing?.dataset.state === controlState) return;
 
     const controls = existing || document.createElement("div");
@@ -208,6 +254,22 @@
     save.textContent = isSaved ? "一覧用情報を更新" : "この人を一覧用に保存";
     save.addEventListener("click", () => captureProfile().catch(console.warn));
     controls.append(save);
+
+    const folder = document.createElement("select");
+    folder.className = "skeb-local-profile-folder";
+    folder.setAttribute("aria-label", "ローカルフォルダ");
+    folder.append(new Option("未分類", ""));
+    for (const name of folders) folder.append(new Option(name, name));
+    folder.value = assignment;
+    folder.addEventListener("change", () => assignProfileFolder(screenName, folder.value).catch(console.warn));
+    controls.append(folder);
+
+    const createFolder = document.createElement("button");
+    createFolder.type = "button";
+    createFolder.className = "skeb-local-folder-create-button";
+    createFolder.textContent = "＋フォルダ作成";
+    createFolder.addEventListener("click", () => createAndAssignProfileFolder(screenName).catch(console.warn));
+    controls.append(createFolder);
 
     if (isSaved) {
       const remove = document.createElement("button");
