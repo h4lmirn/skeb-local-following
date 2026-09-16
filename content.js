@@ -357,15 +357,22 @@
     return document.querySelector("#skeb-local-folder-filter")?.value || "all";
   }
 
-  function layoutItemForCard(card, boundary) {
+  function creatorKeysWithin(element) {
+    const keys = new Set();
+    for (const link of element.querySelectorAll('a[href^="/@"]')) {
+      const match = (link.getAttribute("href") || "").match(/^\/@([^/]+)\/?$/);
+      if (match) keys.add(decodeURIComponent(match[1]).toLowerCase());
+      if (keys.size > 1) break;
+    }
+    return keys;
+  }
+
+  function layoutItemForCard(card, boundary, creatorKey) {
     let item = card;
     while (item.parentElement && item.parentElement !== boundary) {
       const parent = item.parentElement;
-      const style = getComputedStyle(parent);
-      const isGrid = style.display === "grid" || style.display === "inline-grid";
-      const isWrappingFlex = (style.display === "flex" || style.display === "inline-flex") &&
-        style.flexWrap !== "nowrap";
-      if (isGrid || isWrappingFlex) return item;
+      const keys = creatorKeysWithin(parent);
+      if (keys.size > 1 || (keys.size === 1 && !keys.has(creatorKey))) return item;
       item = parent;
     }
     return card;
@@ -403,15 +410,16 @@
     const main = document.querySelector("main");
     if (!main) return;
 
+    main.querySelectorAll(".skeb-local-folder-hidden")
+      .forEach((element) => element.classList.remove("skeb-local-folder-hidden"));
     const layoutItems = [];
     let visibleCount = 0;
     for (const [key, card] of cards) {
       const assigned = assignments[key] || "";
       const visible = selectedFolder === "all" ||
         (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
-      const layoutItem = layoutItemForCard(card, main);
+      const layoutItem = layoutItemForCard(card, main, key);
       layoutItems.push(layoutItem);
-      if (layoutItem !== card) card.classList.remove("skeb-local-folder-hidden");
       layoutItem.classList.toggle("skeb-local-folder-hidden", !visible);
       if (visible) visibleCount += 1;
     }
