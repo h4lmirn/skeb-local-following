@@ -324,7 +324,7 @@
     for (const [key, links] of linksByCreator) {
       const card = chooseCard(links);
       const rect = card?.getBoundingClientRect();
-      const isKnownCard = card?.classList.contains("skeb-local-folder-hidden") ||
+      const isKnownCard = Boolean(card?.closest(".skeb-local-folder-hidden")) ||
         card?.querySelector(".skeb-local-card-organizer");
       if (!card || !card.querySelector("img") || !rect || (!isKnownCard && rect.width * rect.height < 12000)) continue;
       cards.set(key, card);
@@ -336,12 +336,28 @@
     return document.querySelector("#skeb-local-folder-filter")?.value || "all";
   }
 
+  function layoutItemForCard(card, boundary) {
+    let item = card;
+    while (item.parentElement && item.parentElement !== boundary) {
+      const parent = item.parentElement;
+      const style = getComputedStyle(parent);
+      const isGrid = style.display === "grid" || style.display === "inline-grid";
+      const isWrappingFlex = (style.display === "flex" || style.display === "inline-flex") &&
+        style.flexWrap !== "nowrap";
+      if (isGrid || isWrappingFlex) return item;
+      item = parent;
+    }
+    return card;
+  }
+
   function applyFolderFilter(cards, assignments, selectedFolder) {
     for (const [key, card] of cards) {
       const assigned = assignments[key] || "";
       const visible = selectedFolder === "all" ||
         (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
-      card.classList.toggle("skeb-local-folder-hidden", !visible);
+      const layoutItem = layoutItemForCard(card, document.querySelector("main"));
+      if (layoutItem !== card) card.classList.remove("skeb-local-folder-hidden");
+      layoutItem.classList.toggle("skeb-local-folder-hidden", !visible);
     }
   }
 
