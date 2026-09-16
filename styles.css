@@ -26,9 +26,8 @@
   bottom: 18px;
   z-index: 2147483646;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
   max-width: min(680px, calc(100vw - 36px));
   padding: 6px;
@@ -36,6 +35,23 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 5px 20px rgba(24, 42, 38, 0.18);
+}
+
+.skeb-local-profile-save-row,
+.skeb-local-profile-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.skeb-local-profile-save-row .skeb-local-save-button {
+  flex: 1;
+}
+
+.skeb-local-profile-folder-row select {
+  flex: 1;
+  min-width: 0;
 }
 
 #skeb-local-profile-controls button,

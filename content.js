@@ -248,28 +248,14 @@
     controls.dataset.state = controlState;
     controls.replaceChildren();
 
+    const saveRow = document.createElement("div");
+    saveRow.className = "skeb-local-profile-save-row";
     const save = document.createElement("button");
     save.type = "button";
     save.className = "skeb-local-save-button";
     save.textContent = isSaved ? "一覧用情報を更新" : "この人を一覧用に保存";
     save.addEventListener("click", () => captureProfile().catch(console.warn));
-    controls.append(save);
-
-    const folder = document.createElement("select");
-    folder.className = "skeb-local-profile-folder";
-    folder.setAttribute("aria-label", "ローカルフォルダ");
-    folder.append(new Option("未分類", ""));
-    for (const name of folders) folder.append(new Option(name, name));
-    folder.value = assignment;
-    folder.addEventListener("change", () => assignProfileFolder(screenName, folder.value).catch(console.warn));
-    controls.append(folder);
-
-    const createFolder = document.createElement("button");
-    createFolder.type = "button";
-    createFolder.className = "skeb-local-folder-create-button";
-    createFolder.textContent = "＋フォルダ作成";
-    createFolder.addEventListener("click", () => createAndAssignProfileFolder(screenName).catch(console.warn));
-    controls.append(createFolder);
+    saveRow.append(save);
 
     if (isSaved) {
       const remove = document.createElement("button");
@@ -277,8 +263,28 @@
       remove.className = "skeb-local-remove-button";
       remove.textContent = "保存解除";
       remove.addEventListener("click", () => removeCurrentProfile().catch(console.warn));
-      controls.append(remove);
+      saveRow.append(remove);
     }
+    controls.append(saveRow);
+
+    const folderRow = document.createElement("div");
+    folderRow.className = "skeb-local-profile-folder-row";
+    const folder = document.createElement("select");
+    folder.className = "skeb-local-profile-folder";
+    folder.setAttribute("aria-label", "ローカルフォルダ");
+    folder.append(new Option("未分類", ""));
+    for (const name of folders) folder.append(new Option(name, name));
+    folder.value = assignment;
+    folder.addEventListener("change", () => assignProfileFolder(screenName, folder.value).catch(console.warn));
+    folderRow.append(folder);
+
+    const createFolder = document.createElement("button");
+    createFolder.type = "button";
+    createFolder.className = "skeb-local-folder-create-button";
+    createFolder.textContent = "＋フォルダ作成";
+    createFolder.addEventListener("click", () => createAndAssignProfileFolder(screenName).catch(console.warn));
+    folderRow.append(createFolder);
+    controls.append(folderRow);
 
     if (!existing) document.body.append(controls);
   }
