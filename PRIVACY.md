@@ -14,7 +14,6 @@ When the user explicitly presses the save button on a Skeb creator profile, the 
 - Genres and recommended amounts displayed on the page
 - Up to three displayed work-page URLs and thumbnail URLs
 - The date and time the information was saved
-- Creator IDs that the user individually marks as followed
 - User-created local folder names and creator-to-folder assignments
 
 The extension also stores the user's thumbnail-blur and amount-display preferences.
@@ -22,6 +21,8 @@ The extension also stores the user's thumbnail-blur and amount-display preferenc
 ## Storage and transmission
 
 All information is stored in `chrome.storage.local` on the user's device. The extension does not use `chrome.storage.sync`, analytics, advertising services, or a developer-operated server.
+
+When the user chooses to export a backup, the extension creates a JSON file containing the locally stored creator information, folders, and display settings. The file is downloaded only through the user's browser. Import reads only the JSON file explicitly selected by the user and merges it into local extension storage. Backup data is not sent to the developer or another server.
 
 The extension does not directly request creator profiles or the Skeb API. When a saved thumbnail is shown in the following list, the browser may request that image from the image host referenced by Skeb, in the same way as an ordinary web image.
 
@@ -36,7 +37,7 @@ Users can remove one creator's saved information from that creator's profile pag
 ## Permissions
 
 - `storage`: Stores selected creator information and extension settings locally.
-- Access to `https://skeb.jp/*`: Adds the extension interface to Skeb pages and reads the visible page only after the user explicitly chooses to save a creator.
+- Access to `https://skeb.jp/*`: Reads visible page structure to add the extension interface and identify creator cards. Profile details are stored only after the user explicitly chooses to save a creator.
 
 The extension does not request access to cookies, browsing history, authentication tokens, or network interception APIs.
 
