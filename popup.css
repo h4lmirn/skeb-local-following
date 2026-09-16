@@ -51,6 +51,40 @@ legend {
   font-size: 12px;
 }
 
+#folder-form {
+  display: flex;
+  gap: 6px;
+}
+
+#folder-name {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid #bdc6ca;
+  border-radius: 6px;
+}
+
+#folder-form button,
+.folder-row button {
+  width: auto;
+  margin: 0;
+  padding: 6px 9px;
+}
+
+#folder-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
 .note {
   color: #758087;
   font-size: 12px;

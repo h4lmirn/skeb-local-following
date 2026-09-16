@@ -26,7 +26,10 @@
   bottom: 18px;
   z-index: 2147483646;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
+  max-width: min(680px, calc(100vw - 36px));
   padding: 6px;
   border: 1px solid rgba(43, 224, 168, 0.5);
   border-radius: 10px;
@@ -34,13 +37,39 @@
   box-shadow: 0 5px 20px rgba(24, 42, 38, 0.18);
 }
 
-#skeb-local-profile-controls button {
+.skeb-local-profile-save-row,
+.skeb-local-profile-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.skeb-local-profile-save-row .skeb-local-save-button {
+  flex: 1;
+}
+
+.skeb-local-profile-folder-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+#skeb-local-profile-controls button,
+#skeb-local-profile-controls select {
   appearance: none;
   padding: 8px 11px;
   border: 0;
   border-radius: 7px;
   font: 600 12px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   cursor: pointer;
+}
+
+#skeb-local-profile-controls select {
+  appearance: auto;
+  border: 1px solid #bdc6ca;
+  background: #fff;
+  color: #46505a;
+  font-weight: 500;
 }
 
 .skeb-local-save-button {
@@ -53,6 +82,11 @@
   color: #5e6970;
 }
 
+.skeb-local-folder-create-button {
+  background: #e5f8f2;
+  color: #17664f;
+}
+
 #skeb-local-capture-notice.is-visible {
   opacity: 1;
   transform: translateY(0);
@@ -60,6 +94,92 @@
 
 .skeb-local-enhanced-card {
   overflow: visible !important;
+}
+
+#skeb-local-following-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(43, 224, 168, 0.48);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #46505a;
+  font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#skeb-local-following-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#skeb-local-following-toolbar select,
+#skeb-local-following-toolbar button,
+.skeb-local-card-folder {
+  padding: 5px 8px;
+  border: 1px solid #bdc6ca;
+  border-radius: 6px;
+  background: #fff;
+  color: #46505a;
+  font: inherit;
+}
+
+#skeb-local-following-toolbar button {
+  cursor: pointer;
+}
+
+#skeb-local-following-toolbar small {
+  flex-basis: 100%;
+  color: #849099;
+}
+
+.skeb-local-card-organizer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 8px 0;
+  color: #46505a;
+  font: 10px/1.25 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: auto;
+}
+
+.skeb-local-follow-badge {
+  appearance: none;
+  border: 0;
+  padding: 3px 6px;
+  border-radius: 999px;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.skeb-local-follow-badge.is-following {
+  background: #dff9ef;
+  color: #127b5d;
+  font-weight: 700;
+}
+
+.skeb-local-follow-badge.is-not-following {
+  background: #edf0f2;
+  color: #67727b;
+}
+
+.skeb-local-card-folder {
+  min-width: 0;
+  max-width: 120px;
+  padding: 3px 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.skeb-local-folder-hidden {
+  display: none !important;
 }
 
 .skeb-local-panel {
@@ -135,13 +255,31 @@
     background: rgba(30, 38, 42, 0.97);
   }
 
-  .skeb-local-remove-button {
+  #skeb-local-profile-controls select {
+    border-color: #556168;
+    background: #303a3f;
+    color: #e2e8eb;
+  }
+
+  .skeb-local-remove-button,
+  .skeb-local-folder-create-button {
     background: #3a454a;
     color: #d8dfe2;
   }
 
   .skeb-local-panel {
     background: rgba(30, 38, 42, 0.97);
+    color: #e2e8eb;
+  }
+  #skeb-local-following-toolbar {
+    background: rgba(30, 38, 42, 0.97);
+    color: #e2e8eb;
+  }
+  #skeb-local-following-toolbar select,
+  #skeb-local-following-toolbar button,
+  .skeb-local-card-folder {
+    border-color: #556168;
+    background: #303a3f;
     color: #e2e8eb;
   }
   .skeb-local-amount {

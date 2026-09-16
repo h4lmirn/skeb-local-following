@@ -3,6 +3,9 @@
 
   const STORAGE_KEY = "creators";
   const SETTINGS_KEY = "settings";
+  const FOLLOWING_SNAPSHOT_KEY = "followingSnapshot";
+  const FOLDERS_KEY = "folders";
+  const FOLDER_ASSIGNMENTS_KEY = "folderAssignments";
   const MAX_WORKS = 3;
   const PROFILE_PATH = /^\/@([^/]+)\/?$/;
   const FOLLOWING_PATH = /\/(following_users|following_creators)\/?$/;
@@ -180,6 +183,61 @@
     await mountProfileControls();
   }
 
+  async function assignProfileFolder(screenName, folderName) {
+    const key = screenName.toLowerCase();
+    const { [FOLDER_ASSIGNMENTS_KEY]: assignments = {} } =
+      await chrome.storage.local.get(FOLDER_ASSIGNMENTS_KEY);
+    if (folderName) assignments[key] = folderName;
+    else delete assignments[key];
+    await chrome.storage.local.set({ [FOLDER_ASSIGNMENTS_KEY]: assignments });
+    showCaptureNotice(folderName ? `@${screenName} を「${folderName}」に分類しました` : `@${screenName} を未分類に戻しました`);
+  }
+
+  function promptForFolderName() {
+    const input = window.prompt("作成するローカルフォルダ名を入力してください（30文字まで）");
+    if (input === null) return null;
+    const name = input.trim();
+    if (!name) {
+      showCaptureNotice("フォルダ名を入力してください。", true);
+      return null;
+    }
+    if (name.length > 30) {
+      showCaptureNotice("フォルダ名は30文字以内にしてください。", true);
+      return null;
+    }
+    return name;
+  }
+
+  async function createLocalFolder() {
+    const name = promptForFolderName();
+    if (!name) return;
+    const { [FOLDERS_KEY]: folders = [] } = await chrome.storage.local.get(FOLDERS_KEY);
+    if (folders.includes(name)) {
+      showCaptureNotice(`「${name}」はすでにあります`);
+      return;
+    }
+    folders.push(name);
+    await chrome.storage.local.set({ [FOLDERS_KEY]: folders });
+    showCaptureNotice(`ローカルフォルダ「${name}」を作成しました`);
+  }
+
+  async function createAndAssignProfileFolder(screenName) {
+    const name = promptForFolderName();
+    if (!name) return;
+
+    const {
+      [FOLDERS_KEY]: folders = [],
+      [FOLDER_ASSIGNMENTS_KEY]: assignments = {}
+    } = await chrome.storage.local.get([FOLDERS_KEY, FOLDER_ASSIGNMENTS_KEY]);
+    if (!folders.includes(name)) folders.push(name);
+    assignments[screenName.toLowerCase()] = name;
+    await chrome.storage.local.set({
+      [FOLDERS_KEY]: folders,
+      [FOLDER_ASSIGNMENTS_KEY]: assignments
+    });
+    showCaptureNotice(`「${name}」を作成し、@${screenName} を分類しました`);
+  }
+
   async function mountProfileControls() {
     const screenName = profileNameFromPath();
     const main = document.querySelector("main");
@@ -189,9 +247,19 @@
       return;
     }
 
-    const { [STORAGE_KEY]: creators } = await chrome.storage.local.get({ [STORAGE_KEY]: {} });
+    const {
+      [STORAGE_KEY]: creators,
+      [FOLDERS_KEY]: folders,
+      [FOLDER_ASSIGNMENTS_KEY]: assignments
+    } = await chrome.storage.local.get({
+      [STORAGE_KEY]: {},
+      [FOLDERS_KEY]: [],
+      [FOLDER_ASSIGNMENTS_KEY]: {}
+    });
+    const key = screenName.toLowerCase();
     const isSaved = Boolean(creators[screenName.toLowerCase()]);
-    const controlState = `${screenName.toLowerCase()}:${isSaved ? "saved" : "unsaved"}`;
+    const assignment = folders.includes(assignments[key]) ? assignments[key] : "";
+    const controlState = JSON.stringify({ key, isSaved, folders, assignment });
     if (existing?.dataset.state === controlState) return;
 
     const controls = existing || document.createElement("div");
@@ -199,12 +267,14 @@
     controls.dataset.state = controlState;
     controls.replaceChildren();
 
+    const saveRow = document.createElement("div");
+    saveRow.className = "skeb-local-profile-save-row";
     const save = document.createElement("button");
     save.type = "button";
     save.className = "skeb-local-save-button";
     save.textContent = isSaved ? "一覧用情報を更新" : "この人を一覧用に保存";
     save.addEventListener("click", () => captureProfile().catch(console.warn));
-    controls.append(save);
+    saveRow.append(save);
 
     if (isSaved) {
       const remove = document.createElement("button");
@@ -212,8 +282,28 @@
       remove.className = "skeb-local-remove-button";
       remove.textContent = "保存解除";
       remove.addEventListener("click", () => removeCurrentProfile().catch(console.warn));
-      controls.append(remove);
+      saveRow.append(remove);
     }
+    controls.append(saveRow);
+
+    const folderRow = document.createElement("div");
+    folderRow.className = "skeb-local-profile-folder-row";
+    const folder = document.createElement("select");
+    folder.className = "skeb-local-profile-folder";
+    folder.setAttribute("aria-label", "ローカルフォルダ");
+    folder.append(new Option("未分類", ""));
+    for (const name of folders) folder.append(new Option(name, name));
+    folder.value = assignment;
+    folder.addEventListener("change", () => assignProfileFolder(screenName, folder.value).catch(console.warn));
+    folderRow.append(folder);
+
+    const createFolder = document.createElement("button");
+    createFolder.type = "button";
+    createFolder.className = "skeb-local-folder-create-button";
+    createFolder.textContent = "＋フォルダ作成";
+    createFolder.addEventListener("click", () => createAndAssignProfileFolder(screenName).catch(console.warn));
+    folderRow.append(createFolder);
+    controls.append(folderRow);
 
     if (!existing) document.body.append(controls);
   }
@@ -236,6 +326,154 @@
       const rect = link.getBoundingClientRect();
       return rect.width * rect.height > bestArea ? link : best;
     }, null);
+  }
+
+  function creatorCards(main) {
+    const linksByCreator = new Map();
+    for (const link of main.querySelectorAll('a[href^="/@"]')) {
+      const href = link.getAttribute("href") || "";
+      const match = href.match(/^\/@([^/]+)\/?$/);
+      if (!match || link.closest("#skeb-local-following-toolbar")) continue;
+      const key = decodeURIComponent(match[1]).toLowerCase();
+      if (!linksByCreator.has(key)) linksByCreator.set(key, []);
+      linksByCreator.get(key).push(link);
+    }
+
+    const cards = new Map();
+    for (const [key, links] of linksByCreator) {
+      const card = chooseCard(links);
+      const rect = card?.getBoundingClientRect();
+      const isKnownCard = Boolean(card?.closest(".skeb-local-folder-hidden")) ||
+        card?.querySelector(".skeb-local-card-organizer");
+      if (!card || !card.querySelector("img") || !rect || (!isKnownCard && rect.width * rect.height < 12000)) continue;
+      cards.set(key, card);
+    }
+    return cards;
+  }
+
+  function folderFilterValue() {
+    return document.querySelector("#skeb-local-folder-filter")?.value || "all";
+  }
+
+  function layoutItemForCard(card, boundary) {
+    let item = card;
+    while (item.parentElement && item.parentElement !== boundary) {
+      const parent = item.parentElement;
+      const style = getComputedStyle(parent);
+      const isGrid = style.display === "grid" || style.display === "inline-grid";
+      const isWrappingFlex = (style.display === "flex" || style.display === "inline-flex") &&
+        style.flexWrap !== "nowrap";
+      if (isGrid || isWrappingFlex) return item;
+      item = parent;
+    }
+    return card;
+  }
+
+  function applyFolderFilter(cards, assignments, selectedFolder) {
+    for (const [key, card] of cards) {
+      const assigned = assignments[key] || "";
+      const visible = selectedFolder === "all" ||
+        (selectedFolder === "unassigned" ? !assigned : assigned === selectedFolder);
+      const layoutItem = layoutItemForCard(card, document.querySelector("main"));
+      if (layoutItem !== card) card.classList.remove("skeb-local-folder-hidden");
+      layoutItem.classList.toggle("skeb-local-folder-hidden", !visible);
+    }
+  }
+
+  async function toggleFollowingRecord(screenName) {
+    const { [FOLLOWING_SNAPSHOT_KEY]: current = {} } =
+      await chrome.storage.local.get(FOLLOWING_SNAPSHOT_KEY);
+    const screenNames = new Set(Array.isArray(current?.screenNames) ? current.screenNames : []);
+    const willFollow = !screenNames.has(screenName);
+    if (willFollow) screenNames.add(screenName);
+    else screenNames.delete(screenName);
+    const snapshot = {
+      mode: "manual",
+      screenNames: [...screenNames].sort(),
+      capturedAt: Date.now()
+    };
+    await chrome.storage.local.set({ [FOLLOWING_SNAPSHOT_KEY]: snapshot });
+    showCaptureNotice(willFollow ? `@${screenName} を自分のフォローに登録しました` : `@${screenName} のフォロー記録を解除しました`);
+  }
+
+  function makeFollowingToolbar(folders, assignments) {
+    const toolbar = document.createElement("section");
+    toolbar.id = "skeb-local-following-toolbar";
+    toolbar.dataset.state = JSON.stringify({ folders, assignments });
+
+    const title = document.createElement("strong");
+    title.textContent = "ローカル整理";
+    toolbar.append(title);
+
+    const filterLabel = document.createElement("label");
+    filterLabel.textContent = "フォルダ";
+    const filter = document.createElement("select");
+    filter.id = "skeb-local-folder-filter";
+    filter.append(new Option("すべて", "all"), new Option("未分類", "unassigned"));
+    for (const folder of folders) filter.append(new Option(folder, folder));
+    const previousFilter = folderFilterValue();
+    filter.value = [...filter.options].some((option) => option.value === previousFilter)
+      ? previousFilter
+      : "all";
+    filter.addEventListener("change", () => applyFolderFilter(creatorCards(document.querySelector("main")), assignments, filter.value));
+    filterLabel.append(filter);
+    toolbar.append(filterLabel);
+
+    const createFolder = document.createElement("button");
+    createFolder.type = "button";
+    createFolder.textContent = "＋フォルダ作成";
+    createFolder.addEventListener("click", () => createLocalFolder().catch(console.warn));
+    toolbar.append(createFolder);
+    return toolbar;
+  }
+
+  function makeCardOrganizer(key, folders, assignment, snapshot) {
+    const organizer = document.createElement("div");
+    organizer.className = "skeb-local-card-organizer";
+    organizer.dataset.creator = key;
+    organizer.dataset.state = JSON.stringify({ folders, assignment, snapshotAt: snapshot?.capturedAt || 0 });
+
+    const following = snapshot?.screenNames?.includes(key) || false;
+    const followToggle = document.createElement("button");
+    followToggle.type = "button";
+    followToggle.className = `skeb-local-follow-badge ${following ? "is-following" : "is-not-following"}`;
+    followToggle.textContent = following ? "✓ 自分もフォロー中" : "自分のフォローに登録";
+    followToggle.setAttribute("aria-pressed", String(following));
+    for (const eventName of ["mousedown", "pointerdown"]) {
+      followToggle.addEventListener(eventName, (event) => event.stopPropagation());
+    }
+    followToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleFollowingRecord(key).catch(console.warn);
+    });
+    organizer.append(followToggle);
+
+    const folder = document.createElement("select");
+    folder.className = "skeb-local-card-folder";
+    folder.setAttribute("aria-label", "ローカルフォルダ");
+    folder.append(new Option("未分類", ""));
+    for (const name of folders) folder.append(new Option(name, name));
+    folder.value = folders.includes(assignment) ? assignment : "";
+    folder.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    for (const eventName of ["mousedown", "pointerdown"]) {
+      folder.addEventListener(eventName, (event) => event.stopPropagation());
+    }
+    folder.addEventListener("change", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const { [FOLDER_ASSIGNMENTS_KEY]: assignments = {} } =
+        await chrome.storage.local.get(FOLDER_ASSIGNMENTS_KEY);
+      if (folder.value) assignments[key] = folder.value;
+      else delete assignments[key];
+      await chrome.storage.local.set({ [FOLDER_ASSIGNMENTS_KEY]: assignments });
+      showCaptureNotice(folder.value ? `@${key} を「${folder.value}」に分類しました` : `@${key} を未分類に戻しました`);
+    });
+    organizer.append(folder);
+    return organizer;
   }
 
   function settingsSignature(settings) {
@@ -298,26 +536,40 @@
     const main = document.querySelector("main");
     if (!main) return;
 
-    const [{ [STORAGE_KEY]: creators }, { [SETTINGS_KEY]: settings }] = await Promise.all([
+    const [
+      { [STORAGE_KEY]: creators },
+      { [SETTINGS_KEY]: settings },
+      { [FOLLOWING_SNAPSHOT_KEY]: snapshot },
+      { [FOLDERS_KEY]: folders },
+      { [FOLDER_ASSIGNMENTS_KEY]: assignments }
+    ] = await Promise.all([
       chrome.storage.local.get({ [STORAGE_KEY]: {} }),
-      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } })
+      chrome.storage.local.get({ [SETTINGS_KEY]: { blurThumbnails: true, hiddenAmountGenres: [] } }),
+      chrome.storage.local.get({ [FOLLOWING_SNAPSHOT_KEY]: null }),
+      chrome.storage.local.get({ [FOLDERS_KEY]: [] }),
+      chrome.storage.local.get({ [FOLDER_ASSIGNMENTS_KEY]: {} })
     ]);
 
-    const linksByCreator = new Map();
-    for (const link of main.querySelectorAll('a[href^="/@"]')) {
-      const href = link.getAttribute("href") || "";
-      const match = href.match(/^\/@([^/]+)\/?$/);
-      if (!match) continue;
-      const key = decodeURIComponent(match[1]).toLowerCase();
-      if (!linksByCreator.has(key)) linksByCreator.set(key, []);
-      linksByCreator.get(key).push(link);
+    const cards = creatorCards(main);
+    const oldToolbar = document.getElementById("skeb-local-following-toolbar");
+    const nextToolbar = makeFollowingToolbar(folders, assignments);
+    let toolbar = oldToolbar;
+    if (oldToolbar?.dataset.state !== nextToolbar.dataset.state) {
+      if (oldToolbar) oldToolbar.replaceWith(nextToolbar);
+      else main.prepend(nextToolbar);
+      toolbar = nextToolbar;
     }
 
-    for (const [key, links] of linksByCreator) {
+    for (const [key, card] of cards) {
+      const existingOrganizer = card.querySelector(`.skeb-local-card-organizer[data-creator="${CSS.escape(key)}"]`);
+      const organizer = makeCardOrganizer(key, folders, assignments[key] || "", snapshot);
+      if (existingOrganizer?.dataset.state !== organizer.dataset.state) {
+        if (existingOrganizer) existingOrganizer.replaceWith(organizer);
+        else card.append(organizer);
+      }
+
       const record = creators[key];
       if (!record) continue;
-      const card = chooseCard(links);
-      if (!card) continue;
       const existing = card.querySelector(`.skeb-local-panel[data-creator="${CSS.escape(key)}"]`);
       if (existing) {
         if (
@@ -331,6 +583,7 @@
       card.classList.add("skeb-local-enhanced-card");
       card.append(makePanel(record, settings));
     }
+    applyFolderFilter(cards, assignments, toolbar.querySelector("#skeb-local-folder-filter").value);
   }
 
   async function run() {

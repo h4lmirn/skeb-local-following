@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Skeb Local Following",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "閲覧済みのSkebクリエイター情報を端末内に保存し、フォロー中一覧へ表示します。",
   "permissions": ["storage"],
   "content_scripts": [
