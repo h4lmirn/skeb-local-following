@@ -193,18 +193,37 @@
     showCaptureNotice(folderName ? `@${screenName} を「${folderName}」に分類しました` : `@${screenName} を未分類に戻しました`);
   }
 
-  async function createAndAssignProfileFolder(screenName) {
+  function promptForFolderName() {
     const input = window.prompt("作成するローカルフォルダ名を入力してください（30文字まで）");
-    if (input === null) return;
+    if (input === null) return null;
     const name = input.trim();
     if (!name) {
       showCaptureNotice("フォルダ名を入力してください。", true);
-      return;
+      return null;
     }
     if (name.length > 30) {
       showCaptureNotice("フォルダ名は30文字以内にしてください。", true);
+      return null;
+    }
+    return name;
+  }
+
+  async function createLocalFolder() {
+    const name = promptForFolderName();
+    if (!name) return;
+    const { [FOLDERS_KEY]: folders = [] } = await chrome.storage.local.get(FOLDERS_KEY);
+    if (folders.includes(name)) {
+      showCaptureNotice(`「${name}」はすでにあります`);
       return;
     }
+    folders.push(name);
+    await chrome.storage.local.set({ [FOLDERS_KEY]: folders });
+    showCaptureNotice(`ローカルフォルダ「${name}」を作成しました`);
+  }
+
+  async function createAndAssignProfileFolder(screenName) {
+    const name = promptForFolderName();
+    if (!name) return;
 
     const {
       [FOLDERS_KEY]: folders = [],
@@ -377,13 +396,10 @@
     showCaptureNotice(willFollow ? `@${screenName} を自分のフォローに登録しました` : `@${screenName} のフォロー記録を解除しました`);
   }
 
-  function makeFollowingToolbar(folders, snapshot, assignments) {
+  function makeFollowingToolbar(folders, assignments) {
     const toolbar = document.createElement("section");
     toolbar.id = "skeb-local-following-toolbar";
-    toolbar.dataset.state = JSON.stringify({
-      folders,
-      snapshotAt: snapshot?.capturedAt || 0
-    });
+    toolbar.dataset.state = JSON.stringify({ folders, assignments });
 
     const title = document.createElement("strong");
     title.textContent = "ローカル整理";
@@ -403,12 +419,11 @@
     filterLabel.append(filter);
     toolbar.append(filterLabel);
 
-    const snapshotText = document.createElement("span");
-    snapshotText.className = "skeb-local-following-snapshot-text";
-    snapshotText.textContent = Array.isArray(snapshot?.screenNames)
-      ? `自分のフォロー記録：${snapshot.screenNames.length}人`
-      : "自分のフォロー記録：未登録";
-    toolbar.append(snapshotText);
+    const createFolder = document.createElement("button");
+    createFolder.type = "button";
+    createFolder.textContent = "＋フォルダ作成";
+    createFolder.addEventListener("click", () => createLocalFolder().catch(console.warn));
+    toolbar.append(createFolder);
     return toolbar;
   }
 
@@ -537,7 +552,7 @@
 
     const cards = creatorCards(main);
     const oldToolbar = document.getElementById("skeb-local-following-toolbar");
-    const nextToolbar = makeFollowingToolbar(folders, snapshot, assignments);
+    const nextToolbar = makeFollowingToolbar(folders, assignments);
     let toolbar = oldToolbar;
     if (oldToolbar?.dataset.state !== nextToolbar.dataset.state) {
       if (oldToolbar) oldToolbar.replaceWith(nextToolbar);
